@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>风之原 · Winds of Astra — 二次元开放世界原型</title>
+<style>
+  :root{
+    --cyan:#35c5d8; --orange:#f2903a; --ink:#22314a;
+    --panel:rgba(255,255,255,.85);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:#0b1220;
+    font-family:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink)}
+  canvas.webgl{display:block}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+  #hud.hidden,#winCard.hidden,.hidden{display:none!important}
+
+  #questPanel{
+    position:absolute;top:18px;left:18px;min-width:230px;max-width:300px;
+    background:var(--panel);backdrop-filter:blur(6px);
+    border:1px solid rgba(53,197,216,.55);border-radius:14px;
+    padding:12px 16px;box-shadow:0 6px 24px rgba(10,30,60,.25);
+  }
+  #questPanel h1{font-size:17px;letter-spacing:2px;color:#1d6f80}
+  #questPanel h1 small{font-size:11px;color:#8aa3b5;letter-spacing:1px;margin-left:6px}
+  #questObjective{margin-top:6px;font-size:13px;line-height:1.5}
+  #questCount{margin-top:4px;font-size:13px;font-weight:700;color:#0e7f93}
+  #questDist{margin-top:2px;font-size:12px;color:#e07a2f;font-weight:600;display:none}
+
+  #mapWrap{
+    position:absolute;top:18px;right:18px;width:158px;height:158px;
+    background:var(--panel);border:1px solid rgba(53,197,216,.55);
+    border-radius:50%;overflow:hidden;box-shadow:0 6px 24px rgba(10,30,60,.25);
+  }
+  #minimap{width:100%;height:100%;display:block}
+  #clock{
+    position:absolute;top:180px;right:18px;width:158px;text-align:center;
+    font-size:12px;color:#eaf6fa;text-shadow:0 1px 4px rgba(10,30,60,.8);letter-spacing:1px
+  }
+
+  #staminaWrap{
+    position:absolute;left:50%;bottom:64px;transform:translateX(-50%);
+    width:220px;height:9px;border-radius:6px;background:rgba(10,25,45,.45);
+    border:1px solid rgba(255,255,255,.35);opacity:0;transition:opacity .25s;
+  }
+  #staminaWrap.show{opacity:1}
+  #staminaBar{height:100%;width:100%;border-radius:5px;
+    background:linear-gradient(90deg,#ffd45e,#ffb02e)}
+
+  #hint{
+    position:absolute;left:18px;bottom:18px;font-size:12px;line-height:1.7;
+    color:#f4fbff;background:rgba(15,35,60,.45);border-radius:10px;
+    padding:8px 12px;backdrop-filter:blur(4px);transition:opacity 1s;
+  }
+  #hint kbd{background:rgba(255,255,255,.18);border-radius:4px;padding:0 5px;
+    font-family:inherit;font-size:11px;margin:0 1px}
+
+  #toast{
+    position:absolute;top:76px;left:50%;transform:translateX(-50%) translateY(-8px);
+    background:var(--panel);border:1px solid rgba(53,197,216,.7);color:#0e6273;
+    font-size:14px;font-weight:600;letter-spacing:1px;border-radius:999px;
+    padding:8px 22px;opacity:0;transition:all .35s;box-shadow:0 6px 20px rgba(10,30,60,.3);
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  #vignette{position:fixed;inset:0;pointer-events:none;z-index:5;
+    background:radial-gradient(ellipse at center,transparent 62%,rgba(8,20,40,.28) 100%)}
+
+  /* ---------- 开始界面 ---------- */
+  #startOverlay{
+    position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:18px;text-align:center;
+    background:
+      radial-gradient(1200px 600px at 70% 15%,rgba(53,197,216,.35),transparent 60%),
+      radial-gradient(900px 500px at 25% 80%,rgba(242,144,58,.28),transparent 60%),
+      linear-gradient(180deg,#0e1c33 0%,#132a4a 55%,#0b1626 100%);
+  }
+  #startOverlay .deco{color:rgba(160,225,240,.5);letter-spacing:14px;font-size:15px}
+  #gameTitle{
+    font-size:64px;font-weight:800;letter-spacing:10px;
+    background:linear-gradient(120deg,#a8f0ff 10%,#ffd9a0 55%,#ff9d5c 90%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 40px rgba(53,197,216,.35);
+  }
+  #gameSub{font-size:15px;letter-spacing:6px;color:#9fd8e6}
+  #startDesc{font-size:12.5px;color:#7d95b5;line-height:1.9;max-width:520px}
+  #startBtn{
+    pointer-events:auto;cursor:pointer;margin-top:8px;
+    font-size:18px;letter-spacing:8px;font-weight:700;color:#062433;
+    padding:14px 58px 14px 66px;border:none;border-radius:999px;
+    background:linear-gradient(120deg,#7fe3f2,#ffd9a0);
+    box-shadow:0 0 0 2px rgba(255,255,255,.25),0 10px 34px rgba(53,197,216,.45);
+    transition:transform .18s,box-shadow .18s;
+  }
+  #startBtn:hover{transform:translateY(-2px) scale(1.03);
+    box-shadow:0 0 0 2px rgba(255,255,255,.4),0 14px 44px rgba(242,144,58,.55)}
+  #loadingTip{font-size:12px;color:#62809f;letter-spacing:2px}
+
+  /* ---------- 结算卡片 ---------- */
+  #winCard{
+    position:fixed;inset:0;z-index:22;display:flex;align-items:center;justify-content:center;
+    background:rgba(8,18,36,.45);backdrop-filter:blur(3px);
+  }
+  #winInner{
+    background:linear-gradient(160deg,#fffdf6,#eef8fc);
+    border:1px solid rgba(53,197,216,.7);border-radius:22px;
+    padding:38px 60px;text-align:center;box-shadow:0 18px 60px rgba(5,20,45,.5);
+  }
+  #winInner h2{font-size:30px;letter-spacing:8px;color:#0e6273}
+  #winInner .star{color:#f2b03a;font-size:22px;letter-spacing:6px;margin:8px 0 4px}
+  #winStats{margin:10px 0 18px;font-size:14px;color:#3c5a78;line-height:2}
+  #continueBtn{
+    pointer-events:auto;cursor:pointer;border:none;border-radius:999px;
+    padding:10px 42px;font-size:15px;letter-spacing:4px;font-weight:700;color:#fff;
+    background:linear-gradient(120deg,#35c5d8,#4f9ee0);
+  }
+  #continueBtn:hover{filter:brightness(1.08)}
+</style>
+</head>
+<body>
+
+<div id="vignette"></div>
+
+<div id="hud" class="hidden">
+  <div id="questPanel">
+    <h1>风之原<small>Winds of Astra</small></h1>
+    <div id="questObjective">收集散落在岛上的风之晶</div>
+    <div id="questCount">◇ 风之晶 0 / 12</div>
+    <div id="questDist">↗ 距离祭坛 0 m</div>
+  </div>
+  <div id="mapWrap"><canvas id="minimap" width="158" height="158"></canvas></div>
+  <div id="clock">白天 · 08:00</div>
+  <div id="staminaWrap"><div id="staminaBar"></div></div>
+  <div id="hint">
+    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 · <kbd>Shift</kbd> 冲刺 ·
+    <kbd>空格</kbd> 跳跃 / 空中再按展开风之翼 · 水中游泳 ·<br>
+    鼠标拖动 环视 · 滚轮 缩放 · <kbd>H</kbd> 收起提示 · <kbd>M</kbd> 静音
+  </div>
+  <div id="toast"></div>
+</div>
+
+<div id="startOverlay">
+  <div class="deco">◇ ◇ ◇ ◇ ◇ ◇ ◇</div>
+  <div id="gameTitle">风 之 原</div>
+  <div id="gameSub">WINDS OF ASTRA · 二次元开放世界原型</div>
+  <div id="startDesc">
+    程序化生成的幻想海岛 · 卡通渲染 · 滑翔 / 冲刺 / 游泳 / 昼夜循环<br>
+    纯浏览器运行 · 无外部素材 · Three.js（MIT）驱动
+  </div>
+  <button id="startBtn">开 始 冒 险</button>
+  <div id="loadingTip">建议使用 Chrome / Edge 浏览器 · 键盘 + 鼠标操作</div>
+</div>
+
+<div id="winCard" class="hidden">
+  <div id="winInner">
+    <h2>任 务 完 成</h2>
+    <div class="star">★ ★ ★ ★ ★</div>
+    <div id="winStats">风之晶 12 / 12<br>用时 00:00</div>
+    <button id="continueBtn">继 续 漫 步</button>
+  </div>
+</div>
+
+<script src="lib/three.min.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
