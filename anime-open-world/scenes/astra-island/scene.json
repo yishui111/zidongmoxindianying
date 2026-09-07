@@ -1,0 +1,31 @@
+{
+  "name": "astra-island",
+  "title": "风之原 · 海岛",
+  "desc": "阳光海岛：鸟居、祭坛与青山碧海",
+  "spawn": { "x": 0, "z": 24 },
+  "terrain": {
+    "size": 620, "segments": 160, "seed": 20260906,
+    "island": true, "scale": 0.012, "amplitude": 36, "base": 3.5, "detail": 8,
+    "falloffStart": 150, "falloffEnd": 258, "seaLevel": 0, "sandLine": 0.35,
+    "plateau": { "x": 0, "z": 0, "r": 22, "h": 10 }
+  },
+  "sky": { "startTime": 0.145, "dayLength": 240 },
+  "palette": {
+    "sand": "#ecd9a0", "grassA": "#74c058", "grassB": "#4f9e46",
+    "rock": "#8a8f96", "snow": "#f2f7fb", "grassTuft": "#4f9e3c",
+    "water": "#2fb9d6", "trunk": "#8a5a37",
+    "leafA": "#4faf4a", "leafB": "#3fae8a",
+    "torii": "#d8443c", "roof": "#d8703c",
+    "flowers": ["#fff6f8", "#ffd1e4", "#9ecbff", "#ffe9a8", "#ff8f8f"]
+  },
+  "vegetation": { "trees": 130, "rocks": 70, "grass": 900, "flowers": 240 },
+  "landmarks": {
+    "torii": { "x": 0, "z": 13 },
+    "altar": { "x": 0, "z": 0, "h": 10 },
+    "houses": [
+      { "x": 13, "z": -5, "y": 10, "rot": 0.6 },
+      { "x": -14, "z": -2, "y": 10, "rot": -0.9 }
+    ]
+  },
+  "quest": { "crystals": 12 }
+}

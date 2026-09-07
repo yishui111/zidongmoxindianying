@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>风之原 · Winds of Astra — 二次元开放世界原型</title>
+<title>风之原 — 二次元开放世界原型</title>
 <style>
   :root{
     --cyan:#35c5d8; --orange:#f2903a; --ink:#22314a;
@@ -66,6 +66,26 @@
   }
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
+  /* ---------- 角色选择 ---------- */
+  #charPanel{
+    position:absolute;right:18px;top:216px;width:158px;
+    background:var(--panel);backdrop-filter:blur(6px);
+    border:1px solid rgba(53,197,216,.55);border-radius:14px;
+    padding:10px 12px;box-shadow:0 6px 24px rgba(10,30,60,.25);
+  }
+  #charPanel h3{font-size:13px;color:#1d6f80;letter-spacing:3px;margin-bottom:6px}
+  .charBtn{
+    display:block;width:100%;margin:4px 0;padding:6px 8px;
+    font-size:12px;color:#22314a;background:rgba(53,197,216,.10);
+    border:1px solid rgba(53,197,216,.4);border-radius:8px;cursor:pointer;
+    pointer-events:auto;text-align:center;font-family:inherit;
+  }
+  .charBtn:hover{background:rgba(53,197,216,.25)}
+  .charBtn.active{background:linear-gradient(90deg,#7fe3f2,#ffd9a0);border-color:#35c5d8;font-weight:700}
+  #charImport{display:block;text-align:center;font-size:12px;color:#0e6273;cursor:pointer;
+    margin-top:6px;padding:6px 0;border:1px dashed rgba(53,197,216,.6);border-radius:8px;pointer-events:auto}
+  #charImport:hover{background:rgba(53,197,216,.15)}
+
   #vignette{position:fixed;inset:0;pointer-events:none;z-index:5;
     background:radial-gradient(ellipse at center,transparent 62%,rgba(8,20,40,.28) 100%)}
 
@@ -98,6 +118,12 @@
   #startBtn:hover{transform:translateY(-2px) scale(1.03);
     box-shadow:0 0 0 2px rgba(255,255,255,.4),0 14px 44px rgba(242,144,58,.55)}
   #loadingTip{font-size:12px;color:#62809f;letter-spacing:2px}
+  #sceneWrap{margin-top:2px}
+  #sceneLabel{font-size:11px;letter-spacing:4px;color:#7d95b5;margin-bottom:6px}
+  #sceneList{display:flex;gap:8px;justify-content:center;pointer-events:auto}
+  #sceneList .charBtn{width:150px;background:rgba(255,255,255,.08);color:#cfe9f2;
+    border-color:rgba(160,225,240,.4);margin:0}
+  #sceneList .charBtn.active{color:#062433}
 
   /* ---------- 结算卡片 ---------- */
   #winCard{
@@ -126,7 +152,7 @@
 
 <div id="hud" class="hidden">
   <div id="questPanel">
-    <h1>风之原<small>Winds of Astra</small></h1>
+    <h1>风之原<small>开放世界原型</small></h1>
     <div id="questObjective">收集散落在岛上的风之晶</div>
     <div id="questCount">◇ 风之晶 0 / 12</div>
     <div id="questDist">↗ 距离祭坛 0 m</div>
@@ -136,19 +162,28 @@
   <div id="staminaWrap"><div id="staminaBar"></div></div>
   <div id="hint">
     <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 · <kbd>Shift</kbd> 冲刺 ·
-    <kbd>空格</kbd> 跳跃 / 空中再按展开风之翼 · 水中游泳 ·<br>
-    鼠标拖动 环视 · 滚轮 缩放 · <kbd>H</kbd> 收起提示 · <kbd>M</kbd> 静音
+    <kbd>空格</kbd> 跳跃 / 空中再按展开风之翼 · 陡坡自动攀爬(耗体力) · 水中游泳 ·<br>
+    鼠标拖动 环视 · 滚轮 缩放 · <kbd>C</kbd>/数字键 切换角色 · <kbd>H</kbd> 收起提示 · <kbd>M</kbd> 静音
   </div>
   <div id="toast"></div>
+  <div id="charPanel">
+    <h3>角 色</h3>
+    <div id="charList"></div>
+    <label id="charImport">导入 .vrm 模型<input type="file" id="charFile" accept=".vrm" multiple hidden></label>
+  </div>
 </div>
 
 <div id="startOverlay">
   <div class="deco">◇ ◇ ◇ ◇ ◇ ◇ ◇</div>
   <div id="gameTitle">风 之 原</div>
-  <div id="gameSub">WINDS OF ASTRA · 二次元开放世界原型</div>
+  <div id="gameSub">二 次 元 开 放 世 界 原 型</div>
   <div id="startDesc">
-    程序化生成的幻想海岛 · 卡通渲染 · 滑翔 / 冲刺 / 游泳 / 昼夜循环<br>
-    纯浏览器运行 · 无外部素材 · Three.js（MIT）驱动
+    支持自定义 VRM 角色 · 可切换场景 · 昼夜循环 · 滑翔 / 冲刺 / 游泳<br>
+    纯浏览器运行 · Three.js（MIT）+ three-vrm（MIT）驱动
+  </div>
+  <div id="sceneWrap">
+    <div id="sceneLabel">选 择 场 景</div>
+    <div id="sceneList"></div>
   </div>
   <button id="startBtn">开 始 冒 险</button>
   <div id="loadingTip">建议使用 Chrome / Edge 浏览器 · 键盘 + 鼠标操作</div>
@@ -164,6 +199,23 @@
 </div>
 
 <script src="lib/three.min.js"></script>
-<script src="js/game.js"></script>
+<script src="lib/GLTFLoader.js"></script>
+<script src="lib/three-vrm.min.js"></script>
+<script src="js/core/kernel.js"></script>
+<script src="js/core/engine.js"></script>
+<script src="js/core/input.js"></script>
+<script src="js/core/ui.js"></script>
+<script src="js/core/audio.js"></script>
+<script src="js/world/terrain.js"></script>
+<script src="js/world/props.js"></script>
+<script src="js/world/landmarks.js"></script>
+<script src="js/world/loader.js"></script>
+<script src="js/modules/player.js"></script>
+<script src="js/modules/vrm.js"></script>
+<script src="js/modules/sky.js"></script>
+<script src="js/modules/minimap.js"></script>
+<script src="js/modules/quest.js"></script>
+<script src="js/modules/effects.js"></script>
+<script src="js/main.js"></script>
 </body>
 </html>
