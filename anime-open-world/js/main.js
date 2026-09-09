@@ -68,11 +68,13 @@
     A.kernel.boot(['engine', 'input', 'ui', 'audio'], { cfg: cfg });
     A.kernel.boot(['world', 'props', 'landmarks', 'sceneLoader'], { cfg: cfg });
     A.sceneLoader.apply(cfg);
-    A.kernel.boot(['player', 'vrm', 'sky', 'minimap', 'quest', 'effects'], { cfg: cfg });
+    A.decor.build(cfg);
+    A.kernel.boot(['player', 'vrm', 'sky', 'minimap', 'quest', 'effects', 'combat', 'chests', 'waypoints'], { cfg: cfg });
 
     /* 开始按钮 */
     document.getElementById('startBtn').addEventListener('click', function () {
       A.audio.init();
+      A.audio.startMusic();
       A.ui.startOverlay.classList.add('hidden');
       A.ui.hud.classList.remove('hidden');
       A.state.mode = 'play';
@@ -112,9 +114,10 @@
     A.step = function (dt, t, skipRender) {
       /* kernel.tick 按模块树启动顺序调用各模块的 update（L1 → L2） */
       A.kernel.tick(dt, t);
-      /* 空格按下沿信号：本帧已被 player 消费，必须清零，
+      /* 空格/攻击按下沿信号：本帧已被 player 消费，必须清零，
          否则按一次跳会每帧重复触发（跳跃音效连响/风之翼反复开合） */
       A.input.spaceEdge = false;
+      A.input.attackEdge = false;
       /* 开始界面：镜头绕角色缓慢旋转 */
       if (A.state.mode === 'start') {
         A.input.cam.yaw += dt * 0.12;
@@ -126,7 +129,9 @@
     (function animate() {
       requestAnimationFrame(animate);
       try {
-        const dt = Math.min(clock.getDelta(), 0.05);
+        let dt = Math.min(clock.getDelta(), 0.05);
+        /* 命中顿帧：打击瞬间时间短暂放慢，增强手感 */
+        if (A.hitStopT > 0) { A.hitStopT -= dt; dt *= 0.12; }
         elapsed += dt;
         lastFrame = performance.now();
         A.step(dt, elapsed);

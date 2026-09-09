@@ -20,7 +20,7 @@
  * 生命周期：setup(ctx) 初始化一次 → update(dt,t) 每帧按启动顺序调用
  * ===================================================================== */
 window.Astra = {
-  VERSION: '0.3.0',
+  VERSION: '0.4.0',
 
   /* 跨模块共享状态槽（写入方：player；读取方：sky/effects/minimap/follow） */
   shared: {},
@@ -89,11 +89,19 @@ window.Astra = {
     return order.map(function (d) { return d.id; });
   },
 
-  /* ---------- 每帧按启动顺序调用 update ---------- */
+  /* ---------- 每帧按启动顺序调用 update（单模块异常被隔离，不拖垮全局） ---------- */
   tick: function (dt, t) {
     for (let i = 0; i < this._order.length; i++) {
       const d = this._order[i];
-      if (d.update) d.update(dt, t);
+      if (!d.update) continue;
+      try {
+        d.update(dt, t);
+      } catch (e) {
+        if (!d._err) {
+          d._err = true;
+          console.error('模块 ' + d.id + ' 异常（已隔离，不影响其他模块）:', e.message);
+        }
+      }
     }
   }
 };

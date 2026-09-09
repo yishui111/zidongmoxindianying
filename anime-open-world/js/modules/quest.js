@@ -16,6 +16,21 @@
     }
   });
 
+  /* ---------- 讨伐支线：杀 6 只史莱姆 → 攻击力永久 +8 ---------- */
+  A.on('enemy:killed', function () {
+    if (A.state.mode !== 'play' || Q.huntDone) return;
+    A.shared.huntDone = (A.shared.huntDone || 0) + 1;
+    if (A.shared.huntDone >= 6) {
+      Q.huntDone = true;
+      A.player.state.atk = (A.player.state.atk || 0) + 8;
+      A.ui.showToast('支线完成：讨伐史莱姆 ×6！攻击力永久 +8', 3000);
+      A.effects.burst(A.shared.playerPos.x, A.shared.playerPos.y + 1.2, A.shared.playerPos.z, 0xffd45e, 24, 5, 1);
+      A.audio.heal();
+    } else {
+      A.ui.showToast('讨伐史莱姆 ' + A.shared.huntDone + ' / 6', 1000);
+    }
+  });
+
   Q.init = function () {
     const cfg = (A.world.cfg.quest) || { crystals: 12 };
     const geo = new THREE.OctahedronGeometry(0.42);

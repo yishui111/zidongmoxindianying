@@ -47,6 +47,38 @@
     U.staminaWrap.classList.toggle('show', v < 99.5);
   };
   U.setClock = function (text) { U.clock.textContent = text; };
+  U.setStats = function (kills, chests, chestsTotal) {
+    const el = document.getElementById('statLine');
+    if (el) el.textContent = '⚔ 击杀 ' + kills + '　🎁 宝箱 ' + chests + '/' + chestsTotal;
+  };
+  U.setHP = function (v, max) {
+    const bar = document.getElementById('hpBar');
+    const txt = document.getElementById('hpText');
+    if (bar) bar.style.width = Math.max(0, v / max * 100) + '%';
+    if (txt) txt.textContent = Math.max(0, v | 0) + ' / ' + max;
+  };
+  /* 屏幕坐标处的伤害数字（0.8 秒上浮消散） */
+  U.damageNumber = function (sx, sy, text, color) {
+    const layer = document.getElementById('dmgLayer');
+    if (!layer) return;
+    const d = document.createElement('div');
+    d.className = 'dmg';
+    d.style.left = sx + 'px';
+    d.style.top = sy + 'px';
+    d.style.color = color || '#ffd45e';
+    d.textContent = text;
+    layer.appendChild(d);
+    setTimeout(function () { d.remove(); }, 900);
+  };
+  U.flashHit = function () {
+    const el = document.getElementById('hitFlash');
+    if (!el) return;
+    el.style.transition = 'none';
+    el.style.opacity = '0.9';
+    void el.offsetWidth;
+    el.style.transition = 'opacity .5s';
+    el.style.opacity = '0';
+  };
   U.showWin = function (statsHtml) {
     U.winStats.innerHTML = statsHtml;
     U.winCard.classList.remove('hidden');

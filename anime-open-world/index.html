@@ -85,9 +85,38 @@
   #charImport{display:block;text-align:center;font-size:12px;color:#0e6273;cursor:pointer;
     margin-top:6px;padding:6px 0;border:1px dashed rgba(53,197,216,.6);border-radius:8px;pointer-events:auto}
   #charImport:hover{background:rgba(53,197,216,.15)}
+  #wpPanel{position:absolute;right:18px;top:384px;width:158px;background:var(--panel);backdrop-filter:blur(6px);border:1px solid rgba(79,179,255,.55);border-radius:14px;padding:10px 12px;box-shadow:0 6px 24px rgba(10,30,60,.25)}
+  #wpTitle{font-size:12px;color:#1d5f9f;letter-spacing:3px;margin-bottom:6px}
+  #wpTip{font-size:10px;color:#7d95b5;margin-top:4px;text-align:center}
+  .charBtn:disabled{opacity:.45;cursor:default}
+  /* ---------- NPC 对话框 ---------- */
+  #npcDialog{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);width:560px;max-width:90vw;
+    background:linear-gradient(160deg,rgba(15,35,60,.92),rgba(10,25,45,.92));border:1px solid rgba(140,200,255,.5);
+    border-radius:16px;padding:14px 18px;display:flex;gap:14px;align-items:flex-start;
+    box-shadow:0 10px 40px rgba(0,10,30,.5);z-index:9}
+  #npcDialog.hidden{display:none}
+  #npcAvatar{width:52px;height:52px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#f5f9ff,#c8d8f0);
+    display:flex;align-items:center;justify-content:center;font-size:30px;flex:none;
+    border:2px solid rgba(255,220,130,.8)}
+  #npcName{font-size:12px;color:#8fc7ff;letter-spacing:2px;margin-bottom:4px}
+  #npcText{font-size:15px;color:#eef6ff;line-height:1.7;min-height:48px}
+  #npcNext{font-size:10px;color:#8fc7ff;text-align:right;margin-top:4px;visibility:hidden}
 
   #vignette{position:fixed;inset:0;pointer-events:none;z-index:5;
     background:radial-gradient(ellipse at center,transparent 62%,rgba(8,20,40,.28) 100%)}
+  #hitFlash{position:fixed;inset:0;pointer-events:none;z-index:6;opacity:0;
+    background:radial-gradient(ellipse at center,transparent 42%,rgba(255,45,45,.5) 100%)}
+  #dmgLayer{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:8}
+  .dmg{position:absolute;font-weight:800;font-size:19px;text-shadow:0 2px 4px rgba(0,0,0,.65);
+    animation:dmgFloat .8s ease-out forwards;pointer-events:none;white-space:nowrap}
+  @keyframes dmgFloat{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-48px)}}
+
+  /* ---------- 玩家血条 ---------- */
+  #hpWrap{position:absolute;left:50%;bottom:88px;transform:translateX(-50%);width:260px;height:14px;
+    background:rgba(10,25,45,.55);border:1px solid rgba(255,140,120,.55);border-radius:7px}
+  #hpBar{height:100%;width:100%;background:linear-gradient(90deg,#ff9d8a,#e04747);border-radius:6px;transition:width .15s}
+  #hpText{position:absolute;right:8px;top:0;font-size:10px;color:#fff;line-height:14px;
+    text-shadow:0 1px 2px rgba(0,0,0,.7)}
 
   /* ---------- 开始界面 ---------- */
   #startOverlay{
@@ -148,6 +177,9 @@
 </head>
 <body>
 
+<div id="hitFlash"></div>
+<div id="dmgLayer"></div>
+
 <div id="vignette"></div>
 
 <div id="hud" class="hidden">
@@ -155,6 +187,7 @@
     <h1>风之原<small>开放世界原型</small></h1>
     <div id="questObjective">收集散落在岛上的风之晶</div>
     <div id="questCount">◇ 风之晶 0 / 12</div>
+    <div id="statLine">⚔ 击杀 0　🎁 宝箱 0/5</div>
     <div id="questDist">↗ 距离祭坛 0 m</div>
   </div>
   <div id="mapWrap"><canvas id="minimap" width="158" height="158"></canvas></div>
@@ -163,7 +196,17 @@
   <div id="hint">
     <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 · <kbd>Shift</kbd> 冲刺 ·
     <kbd>空格</kbd> 跳跃 / 空中再按展开风之翼 · 陡坡自动攀爬(耗体力) · 水中游泳 ·<br>
-    鼠标拖动 环视 · 滚轮 缩放 · <kbd>C</kbd>/数字键 切换角色 · <kbd>H</kbd> 收起提示 · <kbd>M</kbd> 静音
+    <kbd>左键</kbd> 攻击 · <kbd>F</kbd> 开宝箱 · 鼠标转视角（点击画面锁定，Esc释放） · 滚轮 缩放 · <kbd>V</kbd> 传送面板 · <kbd>C</kbd>/数字键 切换角色 · <kbd>H</kbd> 收起 · <kbd>M</kbd> 静音
+  </div>
+  <div id="hpWrap"><div id="hpBar"></div><div id="hpText">100 / 100</div></div>
+  <div id="wpPanel" class="hidden"><div id="wpTitle">传 送 锚 点</div><div id="wpList"></div><div id="wpTip">按 V 键开关此面板</div></div>
+  <div id="npcDialog" class="hidden">
+    <div id="npcAvatar">🧚</div>
+    <div>
+      <div id="npcName">小风灵</div>
+      <div id="npcText"></div>
+      <div id="npcNext">F 继续 ▼</div>
+    </div>
   </div>
   <div id="toast"></div>
   <div id="charPanel">
@@ -198,24 +241,31 @@
   </div>
 </div>
 
-<script src="lib/three.min.js"></script>
-<script src="lib/GLTFLoader.js"></script>
-<script src="lib/three-vrm.min.js"></script>
-<script src="js/core/kernel.js"></script>
-<script src="js/core/engine.js"></script>
-<script src="js/core/input.js"></script>
-<script src="js/core/ui.js"></script>
-<script src="js/core/audio.js"></script>
-<script src="js/world/terrain.js"></script>
-<script src="js/world/props.js"></script>
-<script src="js/world/landmarks.js"></script>
-<script src="js/world/loader.js"></script>
-<script src="js/modules/player.js"></script>
-<script src="js/modules/vrm.js"></script>
-<script src="js/modules/sky.js"></script>
-<script src="js/modules/minimap.js"></script>
-<script src="js/modules/quest.js"></script>
-<script src="js/modules/effects.js"></script>
-<script src="js/main.js"></script>
+<script src="lib/three.min.js?v=0.9.0"></script>
+<script src="lib/GLTFLoader.js?v=0.9.0"></script>
+<script src="lib/three-vrm.min.js?v=0.9.0"></script>
+<script src="lib/three-vrm-animation.min.js?v=0.9.0"></script>
+<script src="js/core/kernel.js?v=0.9.0"></script>
+<script src="js/core/engine.js?v=0.9.0"></script>
+<script src="js/core/input.js?v=0.9.0"></script>
+<script src="js/core/ui.js?v=0.9.0"></script>
+<script src="js/core/audio.js?v=0.9.0"></script>
+<script src="js/world/terrain.js?v=0.9.0"></script>
+<script src="js/world/props.js?v=0.9.0"></script>
+<script src="js/world/landmarks.js?v=0.9.0"></script>
+<script src="js/world/decor.js?v=0.9.0"></script>
+<script src="js/world/loader.js?v=0.9.0"></script>
+<script src="js/modules/player.js?v=0.9.0"></script>
+<script src="js/modules/vrm.js?v=0.9.0"></script>
+<script src="js/modules/sky.js?v=0.9.0"></script>
+<script src="js/modules/minimap.js?v=0.9.0"></script>
+<script src="js/modules/quest.js?v=0.9.0"></script>
+<script src="js/modules/combat.js?v=0.9.0"></script>
+<script src="js/modules/chests.js?v=0.9.0"></script>
+<script src="js/modules/effects.js?v=0.9.0"></script>
+<script src="js/modules/waypoints.js?v=0.9.0"></script>
+<script src="js/modules/save.js?v=0.9.0"></script>
+<script src="js/modules/npc.js?v=0.9.0"></script>
+<script src="js/main.js?v=0.9.0"></script>
 </body>
 </html>

@@ -54,12 +54,17 @@
   };
 
   FX.firework = function (x, y, z, colorHex) {
+    FX.burst(x, y, z, colorHex, 130, 7, 1.5);
+  };
+
+  /* 通用小爆裂：count 个光点向外扩散 */
+  FX.burst = function (x, y, z, colorHex, count, speed, size) {
     const rnd = Math.random;
-    const n = 130;
+    const n = count || 16;
     const pos = new Float32Array(n * 3), vel = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
       pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
-      const th = rnd() * Math.PI * 2, ph = Math.acos(rnd() * 2 - 1), sp = 5 + rnd() * 7;
+      const th = rnd() * Math.PI * 2, ph = Math.acos(rnd() * 2 - 1), sp = (speed || 6) * (0.5 + rnd());
       vel[i * 3] = Math.sin(ph) * Math.cos(th) * sp;
       vel[i * 3 + 1] = Math.cos(ph) * sp;
       vel[i * 3 + 2] = Math.sin(ph) * Math.sin(th) * sp;
@@ -68,11 +73,11 @@
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     const pts = new THREE.Points(geo, new THREE.PointsMaterial({
       map: A.engine.glowTexture('rgba(255,255,255,1)', 'rgba(255,255,255,0)'),
-      color: colorHex, size: 1.5, transparent: true, opacity: 1,
+      color: colorHex || 0xffffff, size: size || 1, transparent: true, opacity: 1,
       blending: THREE.AdditiveBlending, depthWrite: false
     }));
     A.engine.scene.add(pts);
-    FX.fireworks.push({ pts: pts, vel: vel, life: 0, maxLife: 1.8 });
+    FX.fireworks.push({ pts: pts, vel: vel, life: 0, maxLife: 1.2, gravity: 3 });
   };
 
   FX.update = function (dt) {

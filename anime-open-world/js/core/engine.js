@@ -15,21 +15,27 @@
     }
   });
 
-  E.init = function (cfg) {
-    E.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    E.renderer.setSize(window.innerWidth, window.innerHeight);
-    E.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
-    E.renderer.shadowMap.enabled = true;
-    E.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    /* 电影级色调映射：画面质感的最大单点提升 */
-    E.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    E.renderer.toneMappingExposure = 1.05;
-    E.renderer.domElement.className = 'webgl';
-    document.body.appendChild(E.renderer.domElement);
+    E.init = function (cfg) {
+      const skyCfg = (cfg && cfg.sky) || {};
+      const pal = (cfg && cfg.palette) || {};
+      E.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      E.renderer.setSize(window.innerWidth, window.innerHeight);
+      E.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      E.renderer.shadowMap.enabled = true;
+      E.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      /* 电影级色调映射：画面质感的最大单点提升 */
+      E.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      E.renderer.toneMappingExposure = 1.05;
+      E.renderer.domElement.className = 'webgl';
+      document.body.appendChild(E.renderer.domElement);
 
-    E.scene = new THREE.Scene();
-    E.scene.fog = new THREE.Fog(cfg.fogColor || 0xbfe8f5, cfg.fogNear || 90, cfg.fogFar || 330);
-    E.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 2000);
+      E.scene = new THREE.Scene();
+      E.scene.fog = new THREE.Fog(
+        pal.fog || 0xbfe8f5,
+        skyCfg.fogNear || 100,
+        skyCfg.fogFar || 480
+      );
+      E.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 2000);
 
     E.hemi = new THREE.HemisphereLight(0xcfeaff, 0x67ca7a, 0.55);
     E.scene.add(E.hemi);

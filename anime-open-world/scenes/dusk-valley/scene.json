@@ -4,11 +4,11 @@
   "desc": "黄昏时分的秋色山谷，更险峻的高峰",
   "spawn": { "x": 0, "z": 30 },
   "terrain": {
-    "size": 620, "segments": 160, "seed": 777001,
+    "size": 620, "segments": 200, "seed": 777001,
     "island": false, "scale": 0.010, "amplitude": 40, "base": 6, "detail": 7,
     "seaLevel": -4, "sandLine": -3, "plateau": { "x": 0, "z": 0, "r": 26, "h": 12 }
   },
-  "sky": { "startTime": 0.43, "dayLength": 600 },
+  "sky": { "startTime": 0.43, "dayLength": 600, "fogNear": 110, "fogFar": 520 },
   "palette": {
     "sand": "#d9c08a", "grassA": "#c2a74e", "grassB": "#a8863c",
     "rock": "#7d7168", "grassTuft": "#b09a45",
@@ -17,7 +17,7 @@
     "torii": "#b5382f", "roof": "#a0522d",
     "flowers": ["#ffe9a8", "#ffd1e4", "#ff8f8f", "#e8d9ff"]
   },
-  "vegetation": { "trees": 160, "rocks": 90, "grass": 1100, "flowers": 300 },
+  "vegetation": { "trees": 200, "rocks": 110, "grass": 1500, "flowers": 340 },
   "landmarks": {
     "torii": { "x": 0, "z": 16 },
     "altar": { "x": 0, "z": 0, "h": 12 },
@@ -27,5 +27,7 @@
       { "x": 4, "z": -18, "y": 12, "rot": 0.2 }
     ]
   },
-  "quest": { "crystals": 10 }
+  "quest": { "crystals": 10 },
+  "chests": { "count": 5 },
+  "combat": { "enemies": 10 }
 }

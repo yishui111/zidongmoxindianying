@@ -45,7 +45,7 @@
         q.setFromAxisAngle(UP, rnd() * Math.PI * 2);
         m4.compose(v, q, s);
         im.setMatrixAt(i, m4);
-        if (colorFn) im.setColorAt(i, colorFn());
+        if (colorFn) im.setColorAt(i, colorFn(s));
       });
       im.castShadow = true;
       im.receiveShadow = true;
@@ -58,8 +58,19 @@
       s.set(k, ky || k, k);
     }
 
-    /* 树（双层球冠） */
+    /* 树（双层球冠，卡通风）：祭坛周边为樱花色 */
     const trees = spots.trees;
+    const SAKURA_R = 42;
+    function isSakura(s) { return Math.hypot(s.x, s.z - 8) < SAKURA_R; }
+    function leafColor(s) {
+      if (isSakura(s)) {
+        col.set(rnd() < 0.5 ? 0xf7a8c4 : 0xf193b7);
+      } else {
+        col.set(rnd() < 0.3 ? pal.leafB : pal.leafA);
+      }
+      col.offsetHSL(0, 0, (rnd() - 0.5) * 0.08);
+      return col;
+    }
     if (trees.length) {
       const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.14, 0.22, 1.5, 7), toonMat(pal.trunk), trees.length);
       const leafA = new THREE.InstancedMesh(new THREE.SphereGeometry(1.15, 10, 8), toonMat(0xffffff), trees.length);
@@ -67,11 +78,23 @@
       trunk.geometry.translate(0, 0.75, 0);
       leafA.geometry.translate(0, 2.35, 0);
       leafB.geometry.translate(0, 3.35, 0);
-      const kA = function () { col.set(rnd() < 0.3 ? pal.leafB : pal.leafA); col.offsetHSL(0, 0, (rnd() - 0.5) * 0.08); return col; };
-      const kB = function () { col.set(rnd() < 0.3 ? pal.leafB : pal.leafA); col.offsetHSL(0, 0, (rnd() - 0.5) * 0.06); return col; };
+      /* 树冠随风轻摆 */
+      [leafA, leafB].forEach(function (im) {
+        im.material.onBeforeCompile = function (shader) {
+          shader.uniforms.uWind = windTime;
+          shader.vertexShader = 'uniform float uWind;\n' + shader.vertexShader.replace(
+            '#include <begin_vertex>',
+            '#include <begin_vertex>\n' +
+            '#ifdef USE_INSTANCING\n' +
+            '  float ph2 = instanceMatrix[3].x * 0.2 + instanceMatrix[3].z * 0.15;\n' +
+            '  transformed.x += sin(uWind * 1.3 + ph2) * 0.025 * transformed.y;\n' +
+            '#endif\n'
+          );
+        };
+      });
       fill(trunk, trees, function (p) { const k = 0.8 + rnd() * 0.7; placeAt(p, k); });
-      fill(leafA, trees, function (p) { const k = 0.8 + rnd() * 0.7; placeAt(p, k, k * (0.85 + rnd() * 0.3)); }, kA);
-      fill(leafB, trees, function (p) { const k = 0.8 + rnd() * 0.7; placeAt(p, k); }, kB);
+      fill(leafA, trees, function (p) { const k = 0.8 + rnd() * 0.7; placeAt(p, k, k * (0.85 + rnd() * 0.3)); }, function (s) { return leafColor(s); });
+      fill(leafB, trees, function (p) { const k = 0.8 + rnd() * 0.7; placeAt(p, k); }, function (s) { return leafColor(s); });
     }
 
     /* 岩石 */

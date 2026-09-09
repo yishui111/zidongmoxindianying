@@ -23,6 +23,30 @@
       A.shared.playerPos = PL.root.position;   // 位置引用（原地更新）
       A.shared.playerState = PL.state;
       A.emit('player:ready', { root: PL.root, parts: PL.parts });
+      A.ui.setHP(PL.state.hp, PL.state.maxHp);
+      /* 敌人伤害由 combat 模块通过事件打入；血量归零回祭坛复苏 */
+      A.on('enemy:hitPlayer', function (e) {
+        const S = PL.state;
+        if (A.state.mode !== 'play' || S.invuln > 0) return;
+        S.hp = Math.max(0, S.hp - e.dmg);
+        A.ui.setHP(S.hp, S.maxHp);
+        A.ui.flashHit();
+        A.audio.hurt();
+        /* 受击数字（红色，屏幕中上方抖动） */
+        A.ui.damageNumber(
+          window.innerWidth / 2 + (Math.random() * 80 - 40),
+          window.innerHeight / 2 - 60 + (Math.random() * 20 - 10),
+          '-' + Math.round(e.dmg), '#ff6b6b');
+        if (S.hp <= 0) {
+          S.hp = S.maxHp;
+          S.stamina = 100;
+          S.climbing = false; S.gliding = false; S.swimming = false;
+          S.vy = 0; S.onGround = true; S.invuln = 3;
+          PL.root.position.set(A.world.spawn.x, A.world.heightAt(A.world.spawn.x, A.world.spawn.z), A.world.spawn.z);
+          A.ui.setHP(S.hp, S.maxHp);
+          A.ui.showToast('你倒下了…已在风之祭坛苏醒', 2600);
+        }
+      });
       return PL;
     },
     update: function (dt, t) {
@@ -74,6 +98,13 @@
       mesh(sleeveGeo, new THREE.MeshToonMaterial({ color: C.dress }), 0, -0.04, 0, arm);
     });
     rig.add(M.armL, M.armR);
+
+    /* 佩剑（挂在右手，攻击时随手臂挥动） */
+    const sword = new THREE.Group();
+    mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.15, 8), new THREE.MeshToonMaterial({ color: 0x4a3222 }), 0, 0, 0, sword);
+    mesh(new THREE.BoxGeometry(0.14, 0.028, 0.05), new THREE.MeshToonMaterial({ color: 0xf0c75e }), 0, -0.08, 0, sword);
+    mesh(new THREE.BoxGeometry(0.045, 0.58, 0.018), new THREE.MeshToonMaterial({ color: 0xd7e3ee }), 0, -0.38, 0, sword);
+    M.armR.add(sword);
 
     M.head = new THREE.Group();
     M.head.position.set(0, 1.42, 0);
@@ -211,6 +242,21 @@
         M.head.rotation.x = 0.15;
         break;
       }
+      case 'attack1': {
+        const k = PL.state ? 1 - PL.state.attackTimer / 0.32 : 1;
+        M.armR.rotation.x = -1.7 + k * 1.5;
+        M.armR.rotation.z = 0.6 - k * 1.3;
+        M.armL.rotation.x = -0.3;
+        M.head.rotation.x = 0.05;
+        break;
+      }
+      case 'attack2': {
+        const k2 = PL.state ? 1 - PL.state.attackTimer / 0.32 : 1;
+        M.armR.rotation.x = -2.7 + k2 * 2.3;
+        M.armL.rotation.x = -0.2;
+        M.head.rotation.x = k2 * 0.12;
+        break;
+      }
       case 'land':
         M.legL.rotation.x = -0.4; M.legR.rotation.x = -0.4;
         M.armL.rotation.x = 0.5; M.armR.rotation.x = 0.5;
@@ -229,6 +275,8 @@
       yaw: Math.PI, vy: 0, onGround: true,
       gliding: false, swimming: false, climbing: false, climbBan: 0,
       stamina: 100, staminaIdle: 0,
+      hp: 100, maxHp: 100, invuln: 0,
+      attackTimer: 0, attackCd: 0, attackIdx: 0,
       anim: 'idle', runPhase: 0, landTimer: 0,
       lastSafe: new THREE.Vector3(0, 10, 24)
     };
@@ -388,22 +436,40 @@
           }
         }
         if (!S.climbing) {
-          if (I.spaceEdge) {
-            S.vy = JUMP_V;
-            S.onGround = false;
-            A.audio.jump();
-          }
-          if (wantSprint && S.stamina > 0.5) {
-            if (hasInput) tryMove(mx * SPRINT * dt, mz * SPRINT * dt);
-            drainStamina(22);
-            S.anim = 'run';
-            S.runPhase += dt * (SPRINT / WALK);
-          } else if (hasInput) {
-            tryMove(mx * WALK * dt, mz * WALK * dt);
-            S.anim = 'run';
-            S.runPhase += dt;
+          /* 攻击（左键 / J）：短促挥剑，期间移速降低 */
+          if (S.attackCd > 0) S.attackCd -= dt;
+          if (S.attackTimer > 0) {
+            S.attackTimer -= dt;
+            S.anim = S.attackIdx % 2 ? 'attack2' : 'attack1';
+            if (hasInput) tryMove(mx * WALK * 0.25 * dt, mz * WALK * 0.25 * dt);
           } else {
-            S.anim = 'idle';
+            if (I.spaceEdge) {
+              S.vy = JUMP_V;
+              S.onGround = false;
+              A.audio.jump();
+            }
+            if (I.attackEdge && S.attackCd <= 0) {
+              /* 攻击索敌：3.5m 内最近敌人自动面向 */
+              const aim = A.shared.aimAssist ? A.shared.aimAssist(p.x, p.z) : null;
+              if (aim !== null) S.yaw = aim;
+              S.attackTimer = 0.32;
+              S.attackCd = 0.42;
+              S.attackIdx++;
+              A.audio.swing();
+              A.emit('player:attack', { yaw: S.yaw, x: p.x, z: p.z });
+            }
+            if (wantSprint && S.stamina > 0.5) {
+              if (hasInput) tryMove(mx * SPRINT * dt, mz * SPRINT * dt);
+              drainStamina(22);
+              S.anim = 'run';
+              S.runPhase += dt * (SPRINT / WALK);
+            } else if (hasInput) {
+              tryMove(mx * WALK * dt, mz * WALK * dt);
+              S.anim = 'run';
+              S.runPhase += dt;
+            } else {
+              S.anim = 'idle';
+            }
           }
         }
       } else {
@@ -462,6 +528,7 @@
     p.z = Math.min(WORLD_R, Math.max(-WORLD_R, p.z));
 
     if (S.climbBan > 0) S.climbBan -= dt;
+    if (S.invuln > 0) S.invuln -= dt;
     if (S.staminaIdle > 0) S.staminaIdle -= dt;
     else if (!S.swimming && !S.gliding && !(S.onGround && wantSprint)) {
       S.stamina = Math.min(100, S.stamina + 20 * dt);

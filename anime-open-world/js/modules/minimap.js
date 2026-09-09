@@ -49,6 +49,16 @@
     ctx.clearRect(0, 0, 158, 158);
     ctx.drawImage(MM.pre, 0, 0, 158, 158);
     const ppos = A.shared.playerPos;
+    /* 传送锚点（蓝/灰菱形） */
+    (A.waypoints ? A.waypoints.points : []).forEach(function (w) {
+      const pt = w2m(w.x, w.z);
+      ctx.fillStyle = w.active ? '#4fb3ff' : '#8a94a8';
+      ctx.save();
+      ctx.translate(pt[0], pt[1]);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-3, -3, 6, 6);
+      ctx.restore();
+    });
     (A.shared.poi || []).forEach(function (c) {
       if (c.collected) return;
       const p = w2m(c.mesh.position.x, c.mesh.position.z);

@@ -65,6 +65,23 @@
       SK.clouds.push(g);
     }
     SK.sunDir = new THREE.Vector3();
+
+    /* 太阳与月亮（随昼夜交替升落） */
+    const glow = A.engine.glowTexture;
+    SK.sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glow('rgba(255,244,200,1)', 'rgba(255,190,80,0)'),
+      color: 0xffe9a0, transparent: true, opacity: 0.95,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false
+    }));
+    SK.sunSprite.scale.set(160, 160, 1);
+    E.scene.add(SK.sunSprite);
+    SK.moonSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glow('rgba(235,242,255,1)', 'rgba(150,180,255,0)'),
+      color: 0xdfe8ff, transparent: true, opacity: 0.9,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false
+    }));
+    SK.moonSprite.scale.set(90, 90, 1);
+    E.scene.add(SK.moonSprite);
   };
 
   SK.update = function (dt) {
@@ -100,6 +117,12 @@
 
     E.scene.fog.color.copy(E.skyU.bottom.value);
     SK.stars.material.opacity = Math.min(0.9, Math.max(0, -e * 3.2));
+
+    /* 太阳 / 月亮位置与可见度 */
+    SK.sunSprite.position.copy(player).addScaledVector(SK.sunDir, 700);
+    SK.moonSprite.position.copy(player).addScaledVector(SK.sunDir, -700);
+    SK.sunSprite.material.opacity = Math.min(0.95, Math.max(0, e * 3 + 0.25));
+    SK.moonSprite.material.opacity = Math.min(0.9, Math.max(0, -e * 3 + 0.25));
 
     E.sun.position.copy(player).addScaledVector(SK.sunDir, 130);
     E.sun.target.position.copy(player);

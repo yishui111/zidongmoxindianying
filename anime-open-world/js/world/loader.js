@@ -12,11 +12,11 @@
   });
 
   SL.list = function () {
-    return fetch('scenes/manifest.json').then(function (r) { return r.json(); });
+    return fetch('scenes/manifest.json?v=' + Date.now()).then(function (r) { return r.json(); });
   };
 
   SL.load = function (id) {
-    return fetch('scenes/' + id + '/scene.json').then(function (r) { return r.json(); });
+    return fetch('scenes/' + id + '/scene.json?v=' + Date.now()).then(function (r) { return r.json(); });
   };
 
   /* 装配：地形 → 海面 → 植被 → 地标，返回运行时世界对象 */
