@@ -69,7 +69,9 @@
     A.kernel.boot(['world', 'props', 'landmarks', 'sceneLoader'], { cfg: cfg });
     A.sceneLoader.apply(cfg);
     A.decor.build(cfg);
-    A.kernel.boot(['player', 'vrm', 'sky', 'minimap', 'quest', 'effects', 'combat', 'chests', 'waypoints'], { cfg: cfg });
+    /* bot（JSON脚本遥控）必须排在 player 之前：
+       它置起的 spaceEdge/attackEdge 按下沿要被同帧的 player 消费 */
+    A.kernel.boot(['bot', 'player', 'vrm', 'sky', 'minimap', 'quest', 'effects', 'combat', 'chests', 'waypoints'], { cfg: cfg });
 
     /* 开始按钮 */
     document.getElementById('startBtn').addEventListener('click', function () {
