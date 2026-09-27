@@ -27,6 +27,8 @@
     queue: [], idx: 0, runner: null,
     elapsed: 0,
     pendingUps: [],        // 合成按键等待 keyup 的队列 {code, t}
+    scriptVoice: null,     // 顶层 voice：全局默认配音角色
+    cinema: false,         // 当前是否处于电影模式
     ui: {}
   };
 
@@ -70,7 +72,15 @@
       z: { t: 'n', req: 1, min: -320, max: 320 } } },
     set_time:   { desc: '设置世界时刻（24 小时制，12=正午）', p: {
       hour: { t: 'n', req: 1, min: 0, max: 24 } } },
-    log:        { desc: '在面板与游戏里显示一条消息', p: { text: { t: 's', req: 1 } } }
+    log:        { desc: '在面板与游戏里显示一条消息', p: { text: { t: 's', req: 1 } } },
+    say:        { desc: '字幕台词（可选配音，说完再继续）', p: {
+      text:     { t: 's', req: 1 },
+      name:     { t: 's' },
+      duration: { t: 'n', min: 0.5, max: 30 },
+      voice:    { t: 's' },
+      block:    { t: 'b', def: true } } },
+    cinema:     { desc: '电影模式（上下黑边+隐藏HUD）', p: {
+      on:       { t: 'b', req: 1 } } }
   };
 
   /* ============================ 校验 ============================ */
@@ -86,6 +96,8 @@
       return { ok: false, errors: errors, warns: warns, script: null };
     }
     if (script.version !== undefined && script.version !== '1.0') warns.push('version 建议写 "1.0"');
+    if (script.voice !== undefined && (typeof script.voice !== 'string' || !script.voice.trim()))
+      errors.push('voice（全局默认配音角色）必须是字符串');
     if (!Array.isArray(script.actions)) errors.push('缺少 actions 数组（要执行的动作列表）');
     else if (!script.actions.length) errors.push('actions 不能为空数组');
     if (script.loop !== undefined && (!isInt(script.loop) || script.loop < 1 || script.loop > 99))
@@ -119,6 +131,8 @@
       });
       if (a.type === 'key' && typeof a.code === 'string' && KNOWN_KEYS.indexOf(a.code) < 0)
         warns.push(tag + ' (key): "' + a.code + '" 不在常用键列表（' + KNOWN_KEYS.join(' ') + '），游戏可能没有响应');
+      if (a.type === 'say' && typeof a.text === 'string' && a.text.length > 120)
+        warns.push(tag + ' (say): 台词 ' + a.text.length + ' 字偏长，建议一句不超过 50 字（可拆成多条 say，字幕更好读）');
     });
     return { ok: errors.length === 0, errors: errors, warns: warns, script: script };
   }
@@ -129,6 +143,118 @@
     for (let r = 0; r < loop; r++) (script.actions || []).forEach(function (a) { out.push(a); });
     return out.slice(0, 500);
   }
+
+  /* ==================== 字幕与配音（文字变声音 TTS 服务） ====================
+   * 服务：D:\xm\文字变声音（start.bat 启动），http://127.0.0.1:18062
+   *   GET  /health            → 就绪检查（已放开 CORS，网页可直接调）
+   *   POST /v1/audio/speech   → {voice, input} 返回 mp3 二进制
+   * 服务未启动/失败时自动降级为纯字幕，不阻断脚本。 */
+
+  const SUB = { el: null, nameEl: null, textEl: null, hideTimer: null };
+
+  function showSubtitle(text, name, autoHide) {
+    if (!SUB.el) {
+      SUB.el = document.getElementById('subtitleBox');
+      SUB.nameEl = document.getElementById('subtitleName');
+      SUB.textEl = document.getElementById('subtitleText');
+    }
+    if (!SUB.el) return;
+    clearTimeout(SUB.hideTimer);
+    SUB.nameEl.style.display = name ? '' : 'none';
+    SUB.nameEl.textContent = name || '';
+    SUB.textEl.textContent = text;
+    SUB.el.classList.add('show');
+    if (autoHide) SUB.hideTimer = setTimeout(hideSubtitle, autoHide * 1000);
+  }
+  function hideSubtitle() {
+    clearTimeout(SUB.hideTimer);
+    if (SUB.el) SUB.el.classList.remove('show');
+  }
+  /* 无 duration 时的字幕时长：中文按每秒约 4.5 字的阅读速度 */
+  function autoDur(text) {
+    let n = 0;
+    for (let i = 0; i < text.length; i++) n += text.charCodeAt(i) > 0x2E80 ? 1 : 0.5;
+    return Math.min(12, Math.max(1.5, n / 4.5 + 0.8));
+  }
+
+  const TTS = {
+    base: localStorage.getItem('astra.ttsBase') || 'http://127.0.0.1:18062',
+    on: true,
+    _health: undefined, _healthT: 0,
+    _audio: null, _url: null, _watchdog: 0,
+
+    /* 就绪检查，结果缓存 60s；不可用返回 null */
+    available: async function () {
+      const now = Date.now();
+      if (this._health !== undefined && now - this._healthT < 60000) return this._health;
+      try {
+        const ctl = new AbortController();
+        const tm = setTimeout(function () { ctl.abort(); }, 3000);
+        const r = await fetch(this.base + '/health', { signal: ctl.signal });
+        clearTimeout(tm);
+        const j = await r.json();
+        this._health = (j && j.status === 'ok') ? j : null;
+      } catch (e) { this._health = null; }
+      this._healthT = Date.now();
+      return this._health;
+    },
+
+    /* 合成并播放；resolve({ok:true}) 在音频播完（或失败）时触发 */
+    speak: function (text, voice) {
+      const self = this;
+      let done = false;
+      const finish = function (ok, err) {
+        if (done) return;
+        done = true;
+        clearTimeout(self._watchdog);
+        resolve({ ok: ok, err: err });
+      };
+      let resolve;
+      const p = new Promise(function (res) { resolve = res; });
+      (async function () {
+        try {
+          const health = await self.available();
+          if (!health) {
+            if (!self.warned) {
+              self.warned = true;
+              botLog('⚠ 语音服务未启动（' + self.base + '），台词仅显示字幕', 'err');
+            }
+            return finish(false, '服务未启动');
+          }
+          if (health.ready_roles && health.ready_roles.indexOf(voice) < 0)
+            return finish(false, '配音角色 "' + voice + '" 不在可用列表 ' + health.ready_roles.join('/'));
+          self.stopAudio();
+          const r = await fetch(self.base + '/v1/audio/speech', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ voice: voice, input: text })
+          });
+          if (!r.ok) {
+            const j = await r.json().catch(function () { return {}; });
+            return finish(false, j.detail || ('HTTP ' + r.status));
+          }
+          const blob = await r.blob();
+          if (self._url) URL.revokeObjectURL(self._url);
+          self._url = URL.createObjectURL(blob);
+          const au = new Audio(self._url);
+          self._audio = au;
+          au.onended = au.onerror = function () { if (self._audio === au) self._audio = null; finish(true); };
+          await au.play();
+          /* 兜底：音频事件丢失时按文本长度估算后放行 */
+          self._watchdog = setTimeout(function () { finish(true); }, text.length * 600 + 30000);
+        } catch (e) { finish(false, e.message); }
+      })();
+      return p;
+    },
+
+    stopAudio: function () {
+      clearTimeout(this._watchdog);
+      if (this._audio) {
+        try { this._audio.onended = this._audio.onerror = null; this._audio.pause(); } catch (e) { /* 忽略 */ }
+        this._audio = null;
+      }
+    }
+  };
 
   /* ============================ 执行器 ============================ */
   function clampN(v, a, b) { return Math.min(b, Math.max(a, v)); }
@@ -302,6 +428,47 @@
           },
           tick: function () { return true; }
         };
+
+      case 'say': {
+        const dur = a.duration || autoDur(a.text);
+        const voice = a.voice || B.scriptVoice;
+        let audioPending = false;
+        return {
+          start: function () {
+            showSubtitle(a.text, a.name, a.block === false ? dur : null);
+            if (voice && TTS.on) {
+              audioPending = true;
+              botLog('🔊 配音 ' + voice + '：「' + (a.text.length > 18 ? a.text.slice(0, 18) + '…' : a.text) + '」');
+              TTS.speak(String(a.text), String(voice)).then(function (r) {
+                audioPending = false;
+                if (!r.ok && r.err !== '服务未启动') botLog('⚠ ' + r.err + '（仅显示字幕）', 'err');
+              });
+            }
+            this.t = 0; this.extraWait = 0;
+          },
+          tick: function (dt) {
+            if (a.block === false) return true;      // 边说边动：字幕由定时器收
+            this.t += dt;
+            if (this.t < dur) return false;          // 至少停留 dur 秒
+            if (audioPending) {                       // 配音没播完就等它
+              this.extraWait += dt;
+              return this.extraWait < 90;             // 90s 兜底，防服务挂起卡死脚本
+            }
+            return true;
+          },
+          end: function () { if (a.block !== false) hideSubtitle(); }
+        };
+      }
+
+      case 'cinema':
+        return {
+          start: function () {
+            B.cinema = !!a.on;
+            document.body.classList.toggle('bot-cinema', B.cinema);
+            botLog(a.on ? '🎬 进入电影模式（黑边+隐藏HUD）' : '🎬 退出电影模式');
+          },
+          tick: function () { return true; }
+        };
     }
     return { start: function () {}, tick: function () { return true; } };   // 不可达兜底
   }
@@ -335,6 +502,9 @@
     else if (a.type === 'set_time') s = 'set_time ' + a.hour + '点';
     else if (a.type === 'character') s = 'character #' + a.index;
     else if (a.type === 'log') s = 'log "' + a.text + '"';
+    else if (a.type === 'say') s = 'say「' + (a.text.length > 14 ? a.text.slice(0, 14) + '…' : a.text) + '」' +
+      (a.block === false ? '（不阻塞）' : '');
+    else if (a.type === 'cinema') s = a.on ? 'cinema ON' : 'cinema OFF';
     if (a.note) s += '　— ' + a.note;
     return s;
   }
@@ -358,10 +528,19 @@
   }
 
   /* ============================ 主流程 ============================ */
-  function finish(completed) {
+  function cleanupStage() {
     releaseAll();
     B.pendingUps.forEach(function (u) { synthKeyup(u.code); });
     B.pendingUps.length = 0;
+    TTS.stopAudio();
+    hideSubtitle();
+    if (B.cinema) {
+      B.cinema = false;
+      document.body.classList.remove('bot-cinema');
+    }
+  }
+  function finish(completed) {
+    cleanupStage();
     B.running = false; B.paused = false; B.runner = null;
     setState(completed ? 'done' : 'stopped');
     updateProgress();
@@ -378,6 +557,8 @@
       return false;
     }
     res.warns.forEach(function (m) { botLog('△ ' + m, 'err'); });
+    cleanupStage();
+    B.scriptVoice = (typeof res.script.voice === 'string' && res.script.voice.trim()) ? res.script.voice.trim() : null;
     B.queue = expand(res.script);
     B.idx = 0; B.runner = null; B.elapsed = 0;
     B.running = true; B.paused = false;
@@ -391,8 +572,10 @@
   function pauseToggle() {
     if (!B.running) return;
     B.paused = !B.paused;
-    if (B.paused) { releaseAll(); setState('paused'); botLog('⏸ 已暂停（移动键已松开）'); }
-    else { setState('running'); botLog('⏯ 继续执行'); }
+    if (B.paused) {
+      releaseAll(); TTS.stopAudio(); hideSubtitle();
+      setState('paused'); botLog('⏸ 已暂停（移动键已松开、配音已停止）');
+    } else { setState('running'); botLog('⏯ 继续执行'); }
   }
 
   /* ---------------- 每帧驱动 ---------------- */
@@ -500,6 +683,29 @@
           { type: 'log', text: '滑翔演示结束 ✓' }
         ]
       }
+    },
+    story: {
+      title: '故事模式演示（字幕+配音）',
+      json: {
+        version: '1.0', name: '故事模式演示', voice: 'azhong',
+        actions: [
+          { type: 'cinema', on: true, note: '进入电影模式：黑边+隐藏HUD' },
+          { type: 'zoom', distance: 14, duration: 1.5, note: '开场远景' },
+          { type: 'say', name: '杰森', text: '传说，在这座岛屿的尽头，藏着风的起点。', duration: 3.2 },
+          { type: 'move', direction: 'forward', duration: 1.6, note: '向悬崖跑去' },
+          { type: 'say', name: '杰森', text: '就是这里了……我能感觉到，风在呼唤我。' },
+          { type: 'jump' },
+          { type: 'wait', duration: 0.4 },
+          { type: 'glide', note: '跳崖展翼' },
+          { type: 'wait', duration: 2 },
+          { type: 'glide_stop' },
+          { type: 'wait', duration: 0.6 },
+          { type: 'turn', angle: 180, duration: 1.5, note: '镜头环绕半圈面向角色' },
+          { type: 'zoom', distance: 7, duration: 1, note: '推近特写' },
+          { type: 'say', name: '杰森', text: '旅程，才刚刚开始！', duration: 2.4 },
+          { type: 'cinema', on: false, note: '退出电影模式' }
+        ]
+      }
     }
   };
 
@@ -521,6 +727,17 @@
     /* 面板内敲键盘不能漏进游戏（否则编辑 JSON 时人物乱跑） */
     ['keydown', 'keyup', 'keypress'].forEach(function (ev) {
       B.ui.panel.addEventListener(ev, function (e) { e.stopPropagation(); });
+    });
+
+    /* 配音开关（台词 TTS）：默认开，服务没启动时自动降级为纯字幕 */
+    const ttsCb = $('botTts');
+    TTS.on = localStorage.getItem('astra.ttsOn') !== '0';
+    ttsCb.checked = TTS.on;
+    ttsCb.addEventListener('change', function () {
+      TTS.on = ttsCb.checked;
+      localStorage.setItem('astra.ttsOn', TTS.on ? '1' : '0');
+      if (!TTS.on) TTS.stopAudio();
+      ttsCb.blur();
     });
 
     onClick('botToggle', function () { B.ui.panel.classList.remove('hidden'); B.ui.toggle.classList.add('hidden'); });
